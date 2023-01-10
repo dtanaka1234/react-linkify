@@ -13,9 +13,14 @@ type Props = {
   hrefDecorator: (string) => string,
   matchDecorator: (string) => Array<Object>,
   textDecorator: (string) => string,
+  matchesFoundCallback: (string[]) => void;
 };
 
-class Linkify extends React.Component<Props, {}> {
+type State = {
+  sentMatches: boolean,
+}
+
+class Linkify extends React.Component<Props, State> {
   static defaultProps = {
     componentDecorator: defaultComponentDecorator,
     hrefDecorator: defaultHrefDecorator,
@@ -23,7 +28,14 @@ class Linkify extends React.Component<Props, {}> {
     textDecorator: defaultTextDecorator,
   };
 
-  parseString(string: string) {
+  constructor() {
+    super();
+    this.state = {
+      sentMatches: false,
+    };
+  }
+
+  parseString(string: string, carry: string[]) {
     if (string === '') {
       return string;
     }
@@ -42,6 +54,7 @@ class Linkify extends React.Component<Props, {}> {
       }
 
       const decoratedHref = this.props.hrefDecorator(match.url);
+      carry.push(match.url)
       const decoratedText = this.props.textDecorator(match.text);
       const decoratedComponent = this.props.componentDecorator(decoratedHref, decoratedText, i);
       elements.push(decoratedComponent);
@@ -57,22 +70,33 @@ class Linkify extends React.Component<Props, {}> {
     return (elements.length === 1) ? elements[0] : elements;
   }
 
-  parse(children: any, key: number = 0) {
+  parse(children: any, key: number = 0, carry) {
     if (typeof children === 'string') {
-      return this.parseString(children);
+      return this.parseString(children, carry);
     } else if (React.isValidElement(children) && (children.type !== 'a') && (children.type !== 'button')) {
-      return React.cloneElement(children, {key: key}, this.parse(children.props.children));
+      return React.cloneElement(children, {key: key}, this.parse(children.props.children, 0, carry));
     } else if (Array.isArray(children)) {
-      return children.map((child, i) => this.parse(child, i));
+      return children.map((child, i) => this.parse(child, i, carry));
     }
 
     return children;
   }
 
+  componentDidMount() {
+    this.setState({ sentMatches: true });
+  }
+
   render(): React.Node {
+    const urlMatches = [];
+    const children = this.parse(this.props.children, 0, urlMatches);
+
+    if (!this.state.sentMatches) {
+      this.props.matchesFoundCallback(urlMatches);
+    }
+
     return (
       <React.Fragment>
-        {this.parse(this.props.children)}
+        {children}
       </React.Fragment>
     );
   }
